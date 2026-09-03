@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Datos del proyecto
+/data/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
