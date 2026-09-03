@@ -8,7 +8,7 @@ Análisis de comportamiento de clientes (repetición, destinos y estado del nego
 2. Crea un entorno virtual e instala dependencias:
 ```bash
    python -m venv venv
-   source venv/bin/activate  # En Windows: venv\Scripts\activate
+   venv\Scripts\activate (en Windows)
    pip install -r requirements.txt
 ```
 3. Coloca los 5 CSV proporcionados por Civitatis en `/data/raw`
@@ -37,4 +37,8 @@ _(Pendiente de completar a medida que avance el análisis)_
   - Sesión: 
   - Conversión: 
 - **Tareas delegadas en IA:** 
+1. Diseño de la estructura del repositorio
+2. Código base
 - **Qué propuso la IA y descarté (y por qué):**
+1. Hacer un modelo predictivo (logit or Random Forest)
+2. Usar DuckDB para un csv y pandas para los otros 
