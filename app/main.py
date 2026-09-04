@@ -1,4 +1,5 @@
-"""App Streamlit de una sola página con las métricas de negocio de Civitatis.
+"""
+App Streamlit de una sola página con las métricas de negocio de Civitatis.
 Reutiliza las consultas de /src/queries.py (las mismas de los notebooks 02 y
 03) sobre la base ya limpia /data/processed/civitatis.duckdb.
 
@@ -32,7 +33,7 @@ except FileNotFoundError as e:
 
 st.title("Civitatis — Panel de negocio")
 
-# === Filtros (sidebar) ===
+# Filtros (sidebar)
 st.sidebar.header("Filtros")
 
 canales = ["Todos"] + q.canales_disponibles(con)
@@ -53,30 +54,46 @@ if mes_desde > mes_hasta:
 
 tab_negocio, tab_destinos, tab_repeticion = st.tabs(["Estado del negocio", "Destinos", "Repetición"])
 
-# === Tab 1: Estado del negocio ===
+# Tab 1: Estado del negocio
 with tab_negocio:
-    ventas = q.venta_bruta_vs_neta(con, canal=canal, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
-    bruta = ventas["venta_bruta"][0] or 0
-    neta = ventas["venta_neta"][0] or 0
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Venta bruta", f"{bruta:,.2f} €")
-    col2.metric("Venta neta", f"{neta:,.2f} €")
-    col3.metric("Diferencia (cancelaciones)", f"{bruta - neta:,.2f} €")
-
-    st.subheader("Evolución mensual de venta neta")
-    evolucion = q.evolucion_mensual_venta_neta(con, canal=canal, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
-    fig = px.line(evolucion, x="mes", y="venta_neta", markers=True,
-                   labels={"mes": "Mes", "venta_neta": "Venta neta (€)"})
-    st.plotly_chart(fig, width="stretch")
-
-    st.subheader("Tasa de cancelación")
     cancelacion = q.tasa_cancelacion(con, canal=canal, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
-    col1, col2 = st.columns(2)
-    col1.metric("Tasa de cancelación", f"{cancelacion['tasa_cancelacion_pct'][0]:.2f} %")
-    col2.metric("Total de reservas", f"{int(cancelacion['total_reservas'][0]):,}")
 
-# === Tab 2: Destinos ===
+    if cancelacion["total_reservas"][0] == 0:
+        st.info("No hay reservas para este filtro.")
+    else:
+        ventas = q.venta_bruta_vs_neta(con, canal=canal, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
+        bruta = ventas["venta_bruta"][0] or 0
+        neta = ventas["venta_neta"][0] or 0
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Venta bruta", f"{bruta:,.2f} €")
+        col2.metric("Venta neta", f"{neta:,.2f} €")
+        col3.metric("Diferencia (cancelaciones)", f"{bruta - neta:,.2f} €")
+
+        st.subheader("Evolución mensual de venta neta")
+        evolucion = q.evolucion_mensual_venta_neta(con, canal=canal, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
+        fig = px.line(evolucion, x="mes", y="venta_neta", markers=True,
+                       labels={"mes": "Mes", "venta_neta": "Venta neta (€)"})
+        st.plotly_chart(fig, width="stretch")
+
+        st.subheader("Tasa de cancelación")
+        col1, col2, col3 = st.columns(3)
+
+        canceladas_fmt = f"{int(cancelacion['reservas_canceladas'][0]):,}".replace(",", ".")
+        total_fmt = f"{int(cancelacion['total_reservas'][0]):,}".replace(",", ".")
+
+        col1.metric("Reservas canceladas", canceladas_fmt)
+        col2.metric("Total de reservas", total_fmt)
+        col3.metric("Tasa de cancelación", f"{cancelacion['tasa_cancelacion_pct'][0]:.2f} %")
+
+        st.subheader("Tasa de cancelación por canal")
+        st.caption("Este gráfico ya desglosa por canal, así que ignora el filtro de canal del sidebar (sí respeta el de fechas).")
+        cancelacion_canal = q.cancelacion_por_canal(con, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
+        fig = px.bar(cancelacion_canal.sort_values("tasa_cancelacion_pct"), x="tasa_cancelacion_pct", y="canal", orientation="h",
+                      labels={"tasa_cancelacion_pct": "Tasa de cancelación (%)", "canal": "Canal"})
+        st.plotly_chart(fig, width="stretch")
+
+# Tab 2: Destinos
 with tab_destinos:
     st.subheader("Ranking de destinos por venta neta")
     ranking = q.ranking_destinos(con, canal=canal, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
@@ -94,7 +111,13 @@ with tab_destinos:
                       labels={"pct_recurrencia": "% clientes recurrentes", "destino": "Destino"})
         st.plotly_chart(fig, width="stretch")
 
-# === Tab 3: Repetición ===
+        st.subheader("Tasa de cancelación por destino")
+        cancelacion_destino = q.cancelacion_por_destino(con, canal=canal, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
+        fig = px.bar(cancelacion_destino.sort_values("tasa_cancelacion_pct"), x="tasa_cancelacion_pct", y="destino", orientation="h",
+                      labels={"tasa_cancelacion_pct": "Tasa de cancelación (%)", "destino": "Destino"})
+        st.plotly_chart(fig, width="stretch")
+
+# Tab 3: Repetición
 with tab_repeticion:
     st.subheader("% de clientes recurrentes por canal")
     st.caption("Este gráfico ya desglosa por canal, así que ignora el filtro de canal del sidebar (sí respeta el de fechas).")
@@ -102,6 +125,31 @@ with tab_repeticion:
     fig = px.bar(recurrencia_canal.sort_values("pct_recurrencia"), x="pct_recurrencia", y="canal", orientation="h",
                   labels={"pct_recurrencia": "% clientes recurrentes", "canal": "Canal"})
     st.plotly_chart(fig, width="stretch")
+
+    st.subheader("% de clientes recurrentes por campaña")
+    recurrencia_campana = q.recurrencia_campana(con, canal=canal, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
+    fig = px.bar(recurrencia_campana.sort_values("pct_recurrencia"), x="pct_recurrencia", y="campana", orientation="h",
+                  labels={"pct_recurrencia": "% clientes recurrentes", "campana": "Campaña"})
+    st.plotly_chart(fig, width="stretch")
+
+    campana_recurrentes = q.recurrentes_sin_campana_vs_con_campana(con, canal=canal, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
+    if campana_recurrentes["total_recurrentes"][0] == 0:
+        st.info("No hay clientes recurrentes para este filtro.")
+    else:
+        col1, col2 = st.columns(2)
+        col1.metric("Recurrentes con alguna reserva sin campaña",
+                     f"{campana_recurrentes['pct_con_reserva_sin_campana'][0]:.2f} %")
+        col2.metric("Recurrentes con alguna reserva con campaña",
+                     f"{campana_recurrentes['pct_con_alguna_campana'][0]:.2f} %")
+
+    st.subheader("Distribución de frecuencia de reservas de clientes recurrentes")
+    distribucion_frecuencia = q.distribucion_frecuencia_reservas(con, canal=canal, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
+    if distribucion_frecuencia.empty:
+        st.info("No hay clientes recurrentes para este filtro.")
+    else:
+        fig = px.bar(distribucion_frecuencia, x="n_reservas", y="n_clientes",
+                      labels={"n_reservas": "Nº de reservas", "n_clientes": "Nº de clientes"})
+        st.plotly_chart(fig, width="stretch")
 
     st.caption("Los siguientes gráficos usan `eventos_con_id` (tráfico web), que no tiene columna de canal "
                "ni una fecha fiable para filtrar, así que no responden a los filtros del sidebar.")
@@ -130,6 +178,9 @@ with tab_repeticion:
 
     st.subheader("Intervalo medio entre la 1ª y 2ª reserva de clientes recurrentes")
     intervalo = q.intervalo_recompra(con, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
-    col1, col2 = st.columns(2)
-    col1.metric("Intervalo medio", f"{intervalo['intervalo_medio_dias'][0]:.2f} días")
-    col2.metric("Clientes recurrentes considerados", f"{int(intervalo['n_clientes_recurrentes'][0]):,}")
+    if intervalo["n_clientes_recurrentes"][0] == 0:
+        st.info("No hay clientes recurrentes para este filtro.")
+    else:
+        col1, col2 = st.columns(2)
+        col1.metric("Intervalo medio", f"{intervalo['intervalo_medio_dias'][0]:.2f} días")
+        col2.metric("Clientes recurrentes considerados", f"{int(intervalo['n_clientes_recurrentes'][0]):,}")

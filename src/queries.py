@@ -58,12 +58,28 @@ def tasa_cancelacion(con: duckdb.DuckDBPyConnection, canal=None, fecha_desde=Non
     return con.execute('''
         SELECT
             round(100.0 * sum(CASE WHEN estado = 'cancelada' THEN 1 ELSE 0 END) / count(*), 2) AS tasa_cancelacion_pct,
+            sum(CASE WHEN estado = 'cancelada' THEN 1 ELSE 0 END) AS reservas_canceladas,
             count(*) AS total_reservas
         FROM reservas_limpias
         WHERE ($canal IS NULL OR canal = $canal)
           AND ($fecha_desde IS NULL OR CAST(fecha_reserva AS DATE) >= $fecha_desde)
           AND ($fecha_hasta IS NULL OR CAST(fecha_reserva AS DATE) <= $fecha_hasta)
     ''', {'canal': canal, 'fecha_desde': fecha_desde, 'fecha_hasta': fecha_hasta}).df()
+
+
+def cancelacion_por_canal(con: duckdb.DuckDBPyConnection, fecha_desde=None, fecha_hasta=None):
+    # Sin parámetro `canal`: este resultado ya desglosa por canal (mismo criterio que recurrencia_por_canal).
+    return con.execute('''
+        SELECT
+            canal,
+            round(100.0 * sum(CASE WHEN estado = 'cancelada' THEN 1 ELSE 0 END) / count(*), 2) AS tasa_cancelacion_pct,
+            count(*) AS total_reservas
+        FROM reservas_limpias
+        WHERE ($fecha_desde IS NULL OR CAST(fecha_reserva AS DATE) >= $fecha_desde)
+          AND ($fecha_hasta IS NULL OR CAST(fecha_reserva AS DATE) <= $fecha_hasta)
+        GROUP BY canal
+        ORDER BY tasa_cancelacion_pct DESC
+    ''', {'fecha_desde': fecha_desde, 'fecha_hasta': fecha_hasta}).df()
 
 
 # === Destinos (notebooks/02_negocio_y_destinos.ipynb, sección B) ===
@@ -115,6 +131,26 @@ def recurrencia_destinos(con: duckdb.DuckDBPyConnection, destinos, canal=None, f
     ''', {'destinos': tuple(destinos), 'canal': canal, 'fecha_desde': fecha_desde, 'fecha_hasta': fecha_hasta}).df()
 
 
+def cancelacion_por_destino(con: duckdb.DuckDBPyConnection, canal=None, fecha_desde=None, fecha_hasta=None):
+    return con.execute('''
+        WITH tours_destino AS (
+            SELECT tour_id, regexp_extract(url, 'civitatis\\.com/es/([^/]+)/', 1) AS destino
+            FROM tours
+        )
+        SELECT
+            td.destino,
+            round(100.0 * sum(CASE WHEN r.estado = 'cancelada' THEN 1 ELSE 0 END) / count(*), 2) AS tasa_cancelacion_pct,
+            count(*) AS total_reservas
+        FROM reservas_limpias r
+        JOIN tours_destino td ON r.tour_id = td.tour_id
+        WHERE ($canal IS NULL OR r.canal = $canal)
+          AND ($fecha_desde IS NULL OR CAST(r.fecha_reserva AS DATE) >= $fecha_desde)
+          AND ($fecha_hasta IS NULL OR CAST(r.fecha_reserva AS DATE) <= $fecha_hasta)
+        GROUP BY td.destino
+        ORDER BY tasa_cancelacion_pct DESC
+    ''', {'canal': canal, 'fecha_desde': fecha_desde, 'fecha_hasta': fecha_hasta}).df()
+
+
 # === Repetición (notebooks/03_repeticion.ipynb) ===
 
 def recurrencia_por_canal(con: duckdb.DuckDBPyConnection, fecha_desde=None, fecha_hasta=None):
@@ -135,6 +171,66 @@ def recurrencia_por_canal(con: duckdb.DuckDBPyConnection, fecha_desde=None, fech
         GROUP BY cc.canal
         ORDER BY pct_recurrencia DESC
     ''', {'fecha_desde': fecha_desde, 'fecha_hasta': fecha_hasta}).df()
+
+
+def recurrencia_campana(con: duckdb.DuckDBPyConnection, canal=None, fecha_desde=None, fecha_hasta=None):
+    return con.execute('''
+        WITH clientes_campana AS (
+            SELECT DISTINCT COALESCE(campana, 'sin campaña') AS campana, user_id
+            FROM reservas_limpias
+            WHERE estado != 'cancelada'
+              AND ($canal IS NULL OR canal = $canal)
+              AND ($fecha_desde IS NULL OR CAST(fecha_reserva AS DATE) >= $fecha_desde)
+              AND ($fecha_hasta IS NULL OR CAST(fecha_reserva AS DATE) <= $fecha_hasta)
+        )
+        SELECT
+            cc.campana,
+            count(*) AS total_clientes,
+            round(100.0 * sum(CASE WHEN cr.es_recurrente THEN 1 ELSE 0 END) / count(*), 2) AS pct_recurrencia
+        FROM clientes_campana cc
+        JOIN clientes_recurrentes cr ON cc.user_id = cr.user_id
+        GROUP BY cc.campana
+        ORDER BY pct_recurrencia DESC
+    ''', {'canal': canal, 'fecha_desde': fecha_desde, 'fecha_hasta': fecha_hasta}).df()
+
+
+def recurrentes_sin_campana_vs_con_campana(con: duckdb.DuckDBPyConnection, canal=None, fecha_desde=None, fecha_hasta=None):
+    return con.execute('''
+        SELECT
+            count(DISTINCT CASE WHEN r.campana IS NULL THEN r.user_id END)     AS recurrentes_con_reserva_sin_campana,
+            count(DISTINCT CASE WHEN r.campana IS NOT NULL THEN r.user_id END) AS recurrentes_con_alguna_campana,
+            count(DISTINCT r.user_id)                                         AS total_recurrentes,
+            round(100.0 * count(DISTINCT CASE WHEN r.campana IS NULL THEN r.user_id END) / count(DISTINCT r.user_id), 2) AS pct_con_reserva_sin_campana,
+            round(100.0 * count(DISTINCT CASE WHEN r.campana IS NOT NULL THEN r.user_id END) / count(DISTINCT r.user_id), 2) AS pct_con_alguna_campana
+        FROM reservas_limpias r
+        JOIN clientes_recurrentes cr ON r.user_id = cr.user_id
+        WHERE r.estado != 'cancelada' AND cr.es_recurrente
+          AND ($canal IS NULL OR r.canal = $canal)
+          AND ($fecha_desde IS NULL OR CAST(r.fecha_reserva AS DATE) >= $fecha_desde)
+          AND ($fecha_hasta IS NULL OR CAST(r.fecha_reserva AS DATE) <= $fecha_hasta)
+    ''', {'canal': canal, 'fecha_desde': fecha_desde, 'fecha_hasta': fecha_hasta}).df()
+
+
+def distribucion_frecuencia_reservas(con: duckdb.DuckDBPyConnection, canal=None, fecha_desde=None, fecha_hasta=None):
+    return con.execute('''
+        WITH clientes_filtrados AS (
+            SELECT DISTINCT user_id
+            FROM reservas_limpias
+            WHERE estado != 'cancelada'
+              AND ($canal IS NULL OR canal = $canal)
+              AND ($fecha_desde IS NULL OR CAST(fecha_reserva AS DATE) >= $fecha_desde)
+              AND ($fecha_hasta IS NULL OR CAST(fecha_reserva AS DATE) <= $fecha_hasta)
+        )
+        SELECT
+            CASE WHEN cr.reservas_no_canceladas >= 5 THEN '5+' ELSE CAST(cr.reservas_no_canceladas AS VARCHAR) END AS n_reservas,
+            count(*) AS n_clientes,
+            round(100.0 * count(*) / sum(count(*)) OVER (), 2) AS pct_clientes
+        FROM clientes_recurrentes cr
+        JOIN clientes_filtrados cf ON cr.user_id = cf.user_id
+        WHERE cr.es_recurrente
+        GROUP BY n_reservas
+        ORDER BY n_reservas
+    ''', {'canal': canal, 'fecha_desde': fecha_desde, 'fecha_hasta': fecha_hasta}).df()
 
 
 def recurrencia_por_dispositivo(con: duckdb.DuckDBPyConnection):
@@ -239,8 +335,26 @@ def canales_disponibles(con: duckdb.DuckDBPyConnection):
 
 
 def meses_disponibles(con: duckdb.DuckDBPyConnection):
+    # Mismo patrón generate_series + LEFT JOIN que evolucion_mensual_venta_neta,
+    # para que el desplegable liste todos los meses del rango (no solo los que
+    # tienen alguna reserva).
     return con.execute('''
-        SELECT DISTINCT strftime(CAST(fecha_reserva AS DATE), '%Y-%m') AS mes
-        FROM reservas_limpias
-        ORDER BY mes
+        WITH rango AS (
+            SELECT
+                date_trunc('month', min(fecha_reserva)) AS mes_min,
+                date_trunc('month', max(fecha_reserva)) AS mes_max
+            FROM reservas_limpias
+        ),
+        meses AS (
+            SELECT unnest(generate_series(mes_min, mes_max, INTERVAL 1 MONTH)) AS mes
+            FROM rango
+        ),
+        meses_con_reservas AS (
+            SELECT DISTINCT date_trunc('month', fecha_reserva) AS mes
+            FROM reservas_limpias
+        )
+        SELECT strftime(m.mes, '%Y-%m') AS mes
+        FROM meses m
+        LEFT JOIN meses_con_reservas r ON m.mes = r.mes
+        ORDER BY m.mes
     ''').df()['mes'].tolist()
