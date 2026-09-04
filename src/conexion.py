@@ -34,14 +34,23 @@ RAW_TABLES = {
 }
 
 
-def registrar_vistas_raw(con: duckdb.DuckDBPyConnection) -> None:
+def registrar_vistas_raw(con: duckdb.DuckDBPyConnection, materializar: set[str] = frozenset()) -> None:
     """
-    Registra las vistas `CREATE OR REPLACE VIEW <nombre> AS SELECT * FROM <csv>`
-    sobre la conexión dada, apuntando a los CSV de /data/raw.
+    Registra `<nombre> AS SELECT * FROM <csv>` sobre la conexión dada, apuntando
+    a los CSV de /data/raw, como VIEW (por defecto) o como TABLE para los
+    nombres incluidos en `materializar`.
+
+    Cualquier tabla que se vaya a consultar desde la app de Streamlit debe
+    pasar por `materializar`: la app corre sobre el `.duckdb` ya generado, sin
+    acceso a /data/raw (en Streamlit Cloud ese directorio no existe), así que
+    una VIEW que apunte a un CSV externo fallaría en cuanto se consultase.
     """
     for nombre, csv_file in RAW_TABLES.items():
         csv_path = (RAW_DIR / csv_file).resolve()
-        con.execute(f"CREATE OR REPLACE VIEW {nombre} AS SELECT * FROM '{csv_path.as_posix()}'")
+        con.execute(f"DROP VIEW IF EXISTS {nombre}")
+        con.execute(f"DROP TABLE IF EXISTS {nombre}")
+        tipo = "TABLE" if nombre in materializar else "VIEW"
+        con.execute(f"CREATE {tipo} {nombre} AS SELECT * FROM '{csv_path.as_posix()}'")
 
 
 def connect_processed(read_only: bool = True) -> duckdb.DuckDBPyConnection:

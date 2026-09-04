@@ -1,6 +1,6 @@
 # Informe de calidad de datos — Civitatis
 
-_Generado automáticamente por `python -m src.limpieza`. Fecha: 2026-09-04 12:03._
+_Generado automáticamente por `python -m src.limpieza`. Fecha: 2026-09-04 17:40._
 
 Este informe explica qué se ha limpiado en cada tabla
 y cuánto cambian los números por ello.
@@ -20,7 +20,8 @@ y cuánto cambian los números por ello.
   **30 reservas**, que sumaban
   **3,283.99 €**.
 
-- **Reservas con importe 0€**: había **1,295 reservas**
+- **Reservas con importe 0€ (decisión pendiente del análisis exploratorio,
+  ahora resuelta)**: había **1,295 reservas**
   con `importe_eur = 0€`, y quedaba por confirmar si eran tours realmente
   gratuitos o cancelaciones/errores sin cobro. Cruzando cada una con el
   precio de catálogo de su tour (`tours.precio_por_persona_eur`):
@@ -29,7 +30,6 @@ y cuánto cambian los números por ello.
   corresponden a un tour cuyo precio de catálogo también es 0€ — son tours
   gratuitos legítimos — y **0**
   corresponden a un tour de pago cobrado a 0€ (caso sospechoso de error).
-
   Desglose por estado de las 1,295 reservas
   con importe 0€: 1,076 confirmada, 175 cancelada, 44 pendiente.
   No se han excluido de `venta_bruta`/`venta_neta` ni de ningún conteo:

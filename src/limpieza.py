@@ -23,7 +23,10 @@ def construir_base_procesada() -> dict:
     conexion.PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect(str(conexion.PROCESSED_DB_PATH))
     try:
-        conexion.registrar_vistas_raw(con)  # ga_eventos, reservas, clientes, tours, proveedores
+        # tours se materializa como TABLE porque src/queries.py la consulta
+        # directamente (ranking_destinos y demás); el resto queda como VIEW
+        # sobre /data/raw, que solo hace falta al regenerar esta base.
+        conexion.registrar_vistas_raw(con, materializar={"tours"})  # ga_eventos, reservas, clientes, tours, proveedores
 
         # Números "antes", para la comparación posterior en el informe
         reservas_antes_filas, reservas_antes_importe = con.execute(
