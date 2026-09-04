@@ -33,22 +33,31 @@ def construir_base_procesada() -> dict:
         clientes_antes_filas = con.execute("SELECT count(*) FROM clientes").fetchone()[0]
 
         # 1) reservas_limpias: normaliza 'estado' a minúsculas (confirmada/cancelada/pendiente) y elimina las 30 reservas con personas <= 0 (no existe una reserva de "0" o "-1" personas, es un error de captura)
+        #
+        # 'tour_gratuito': de las 1.297 reservas con importe_eur = 0€ (investigado con SQL sobre
+        # /data/raw), el 100% corresponde a tours cuyo precio_por_persona_eur en el catálogo
+        # también es 0€ — no hay ni un solo caso de tour de pago cobrado a 0€. No son errores de
+        # cobro, así que no se excluyen de venta_bruta/venta_neta (tampoco cambiaría la cifra: son
+        # 0€). Se deja esta columna para dejar constancia explícita de que se investigó y documentar
+        # cuántas reservas "de importe 0" son en realidad tours gratuitos legítimos.
         con.execute("""
             CREATE OR REPLACE TABLE reservas_limpias AS
             SELECT
-                reserva_id,
-                user_id,
-                tour_id,
-                proveedor_id,
-                fecha_reserva,
-                fecha_actividad,
-                CASE lower(estado) WHEN 'cancelled' THEN 'cancelada' ELSE lower(estado) END AS estado,
-                personas,
-                importe_eur,
-                campana,
-                canal
-            FROM reservas
-            WHERE personas > 0
+                r.reserva_id,
+                r.user_id,
+                r.tour_id,
+                r.proveedor_id,
+                r.fecha_reserva,
+                r.fecha_actividad,
+                CASE lower(r.estado) WHEN 'cancelled' THEN 'cancelada' ELSE lower(r.estado) END AS estado,
+                r.personas,
+                r.importe_eur,
+                t.precio_por_persona_eur = 0 AS tour_gratuito,
+                r.campana,
+                r.canal
+            FROM reservas r
+            LEFT JOIN tours t ON r.tour_id = t.tour_id
+            WHERE r.personas > 0
         """)
 
         # 2) eventos_limpios: elimina los 798 eventos duplicados exactos y normaliza 'device' (mobile/desktop/tablet, corrige el typo 'desktp')
@@ -138,6 +147,22 @@ def calcular_impacto_limpieza(con: duckdb.DuckDBPyConnection, *, reservas_antes_
     m["reservas_despues_filas"] = reservas_despues_filas
     m["reservas_despues_importe"] = round(reservas_despues_importe, 2)
 
+    m["reservas_importe_cero_filas"] = con.execute(
+        "SELECT count(*) FROM reservas_limpias WHERE importe_eur = 0"
+    ).fetchone()[0]
+    m["reservas_importe_cero_tour_gratuito_filas"] = con.execute(
+        "SELECT count(*) FROM reservas_limpias WHERE importe_eur = 0 AND tour_gratuito"
+    ).fetchone()[0]
+    m["reservas_importe_cero_sospechosas_filas"] = con.execute(
+        "SELECT count(*) FROM reservas_limpias WHERE importe_eur = 0 AND NOT tour_gratuito"
+    ).fetchone()[0]
+    m["reservas_importe_cero_por_estado"] = con.execute("""
+        SELECT estado, count(*) FROM reservas_limpias
+        WHERE importe_eur = 0
+        GROUP BY estado
+        ORDER BY count(*) DESC
+    """).fetchall()
+
     # --- eventos_limpios ---
     m["eventos_antes_filas"] = eventos_antes_filas
     eventos_despues_filas = con.execute("SELECT count(*) FROM eventos_limpios").fetchone()[0]
@@ -188,6 +213,23 @@ y cuánto cambian los números por ello.
   "0" o "-1" personas, así que se han eliminado directamente. Eran
   **{m['reservas_personas_invalidas_filas']} reservas**, que sumaban
   **{m['reservas_personas_invalidas_importe']:,.2f} €**.
+
+- **Reservas con importe 0€ (decisión pendiente del análisis exploratorio,
+  ahora resuelta)**: había **{m['reservas_importe_cero_filas']:,} reservas**
+  con `importe_eur = 0€`, y quedaba por confirmar si eran tours realmente
+  gratuitos o cancelaciones/errores sin cobro. Cruzando cada una con el
+  precio de catálogo de su tour (`tours.precio_por_persona_eur`):
+  **{m['reservas_importe_cero_tour_gratuito_filas']:,} de
+  {m['reservas_importe_cero_filas']:,} ({100 * m['reservas_importe_cero_tour_gratuito_filas'] / m['reservas_importe_cero_filas']:.2f}%)**
+  corresponden a un tour cuyo precio de catálogo también es 0€ — son tours
+  gratuitos legítimos — y **{m['reservas_importe_cero_sospechosas_filas']:,}**
+  corresponden a un tour de pago cobrado a 0€ (caso sospechoso de error).
+  Desglose por estado de las {m['reservas_importe_cero_filas']:,} reservas
+  con importe 0€: {', '.join(f"{n:,} {estado}" for estado, n in m['reservas_importe_cero_por_estado'])}.
+  No se han excluido de `venta_bruta`/`venta_neta` ni de ningún conteo:
+  al sumar 0€, no alteran ninguna cifra, y se ha añadido la columna
+  `tour_gratuito` a `reservas_limpias` para dejar constancia explícita de
+  que se investigó y documentar qué reservas son gratuitas por diseño.
 
 **Resultado**: las reservas pasan de {m['reservas_antes_filas']:,} a
 {m['reservas_despues_filas']:,} filas, y el importe total pasa de
