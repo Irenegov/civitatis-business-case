@@ -218,8 +218,19 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Datos del proyecto
-/data/
+# Nota: git no permite "reincluir" un fichero dentro de un directorio ya
+# excluido (con /data/ a secas, git ni siquiera mira dentro de /data/processed/,
+# así que las excepciones de más abajo no funcionarían). Por eso aquí se
+# excluye el *contenido* de /data/ (/data/*), no el directorio en sí.
+/data/*
 
 # Sistema operativo
 .DS_Store
 Thumbs.db
+
+# Excepción: la base ya procesada SÍ se versiona (ver README) — solo los
+# CSV crudos y demás contenido de /data quedan ignorados por la regla de
+# arriba.
+!/data/processed/
+/data/processed/*
+!/data/processed/civitatis.duckdb

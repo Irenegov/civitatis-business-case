@@ -5,11 +5,6 @@ Todos los notebooks deberían obtener su conexión a través de este módulo en 
 de repetir los `CREATE OR REPLACE VIEW ... FROM '<csv>'` en cada uno (como se
 hacía en notebooks/01_exploracion_inicial.ipynb).
 
-Dos formas de conectar:
-
-- `connect_raw()`: conexión en memoria con los CSV originales. 
-Pensada para exploración y como entrada del pipeline de
-  limpieza (`src.limpieza`).
 
 - `connect_processed()`: abre `/data/processed/civitatis.duckdb`, generado por
   `python -m src.limpieza`, que ya contiene las tablas limpias
