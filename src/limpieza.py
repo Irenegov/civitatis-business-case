@@ -34,8 +34,10 @@ def construir_base_procesada() -> dict:
 
         # 1) reservas_limpias: normaliza 'estado' a minúsculas (confirmada/cancelada/pendiente) y elimina las 30 reservas con personas <= 0 (no existe una reserva de "0" o "-1" personas, es un error de captura)
         #
-        # 'tour_gratuito': de las 1.297 reservas con importe_eur = 0€ (investigado con SQL sobre
-        # /data/raw), el 100% corresponde a tours cuyo precio_por_persona_eur en el catálogo
+        # 'tour_gratuito': de las 1.297 reservas con importe_eur = 0€ en /data/raw (investigado
+        # con SQL sobre los datos crudos; 1.295 de esas 1.297 siguen en reservas_limpias, ya que
+        # 2 de ellas también tenían personas <= 0 y se eliminan en el filtro de más abajo), el
+        # 100% corresponde a tours cuyo precio_por_persona_eur en el catálogo
         # también es 0€ — no hay ni un solo caso de tour de pago cobrado a 0€. No son errores de
         # cobro, así que no se excluyen de venta_bruta/venta_neta (tampoco cambiaría la cifra: son
         # 0€). Se deja esta columna para dejar constancia explícita de que se investigó y documentar

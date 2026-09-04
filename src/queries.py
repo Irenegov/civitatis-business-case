@@ -23,16 +23,34 @@ def venta_bruta_vs_neta(con: duckdb.DuckDBPyConnection, canal=None, fecha_desde=
 
 
 def evolucion_mensual_venta_neta(con: duckdb.DuckDBPyConnection, canal=None, fecha_desde=None, fecha_hasta=None):
+    # Envuelve la agregación mensual con generate_series + LEFT JOIN para que los meses
+    # sin ninguna reserva aparezcan con venta_neta = 0 en vez de faltar en el resultado.
     return con.execute('''
+        WITH rango AS (
+            SELECT
+                date_trunc('month', coalesce($fecha_desde::DATE, (SELECT min(fecha_reserva) FROM reservas_limpias))) AS mes_min,
+                date_trunc('month', coalesce($fecha_hasta::DATE, (SELECT max(fecha_reserva) FROM reservas_limpias))) AS mes_max
+        ),
+        meses AS (
+            SELECT unnest(generate_series(mes_min, mes_max, INTERVAL 1 MONTH)) AS mes
+            FROM rango
+        ),
+        ventas AS (
+            SELECT
+                date_trunc('month', fecha_reserva) AS mes,
+                sum(importe_eur) FILTER (WHERE estado != 'cancelada') AS venta_neta
+            FROM reservas_limpias
+            WHERE ($canal IS NULL OR canal = $canal)
+              AND ($fecha_desde IS NULL OR CAST(fecha_reserva AS DATE) >= $fecha_desde)
+              AND ($fecha_hasta IS NULL OR CAST(fecha_reserva AS DATE) <= $fecha_hasta)
+            GROUP BY mes
+        )
         SELECT
-            date_trunc('month', fecha_reserva) AS mes,
-            coalesce(sum(importe_eur) FILTER (WHERE estado != 'cancelada'), 0) AS venta_neta
-        FROM reservas_limpias
-        WHERE ($canal IS NULL OR canal = $canal)
-          AND ($fecha_desde IS NULL OR CAST(fecha_reserva AS DATE) >= $fecha_desde)
-          AND ($fecha_hasta IS NULL OR CAST(fecha_reserva AS DATE) <= $fecha_hasta)
-        GROUP BY mes
-        ORDER BY mes
+            m.mes,
+            coalesce(v.venta_neta, 0) AS venta_neta
+        FROM meses m
+        LEFT JOIN ventas v ON m.mes = v.mes
+        ORDER BY m.mes
     ''', {'canal': canal, 'fecha_desde': fecha_desde, 'fecha_hasta': fecha_hasta}).df()
 
 
@@ -198,8 +216,8 @@ def intervalo_recompra(con: duckdb.DuckDBPyConnection, fecha_desde=None, fecha_h
             SELECT
                 r.user_id,
                 r.fecha_reserva,
-                row_number() OVER (PARTITION BY r.user_id ORDER BY r.fecha_reserva) AS n_reserva,
-                LAG(r.fecha_reserva) OVER (PARTITION BY r.user_id ORDER BY r.fecha_reserva) AS fecha_reserva_anterior
+                row_number() OVER (PARTITION BY r.user_id ORDER BY r.fecha_reserva, r.reserva_id) AS n_reserva,
+                LAG(r.fecha_reserva) OVER (PARTITION BY r.user_id ORDER BY r.fecha_reserva, r.reserva_id) AS fecha_reserva_anterior
             FROM reservas_limpias r
             JOIN clientes_recurrentes cr ON r.user_id = cr.user_id
             WHERE r.estado != 'cancelada' AND cr.es_recurrente
