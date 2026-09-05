@@ -3,4 +3,6 @@ duckdb
 streamlit
 plotly
 scikit-learn
+nbformat
 ipykernel
+nbclient
