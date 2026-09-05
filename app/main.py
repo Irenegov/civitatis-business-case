@@ -102,7 +102,7 @@ with tab_negocio:
 # Tab 2: Destinos
 with tab_destinos:
     st.markdown(
-        "Qué destinos tienen más acogida y cuáles retienen mejor a sus clientes**. "
+        "**Qué destinos tienen más acogida y cuáles retienen mejor a sus clientes**. "
         "No siempre coinciden: hay destinos que venden mucho pero retienen poco, y otros con menos "
         "volumen que fidelizan mejor a quien los reserva."
     )
