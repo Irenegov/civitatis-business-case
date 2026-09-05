@@ -56,6 +56,12 @@ tab_negocio, tab_destinos, tab_repeticion = st.tabs(["Estado del negocio", "Dest
 
 # Tab 1: Estado del negocio
 with tab_negocio:
+    st.markdown(
+        "**Cuánto se ha vendido realmente**: se distingue la venta bruta de la venta neta "
+        "(descontando cancelaciones) y se tiene en cuenta que hasta julio de 2024 la operativa fue de "
+        "prueba, con datos poco representativos del negocio real."
+    )
+
     cancelacion = q.tasa_cancelacion(con, canal=canal, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
 
     if cancelacion["total_reservas"][0] == 0:
@@ -95,6 +101,12 @@ with tab_negocio:
 
 # Tab 2: Destinos
 with tab_destinos:
+    st.markdown(
+        "Qué destinos tienen más acogida y cuáles retienen mejor a sus clientes**. "
+        "No siempre coinciden: hay destinos que venden mucho pero retienen poco, y otros con menos "
+        "volumen que fidelizan mejor a quien los reserva."
+    )
+
     st.subheader("Ranking de destinos por venta neta")
     ranking = q.ranking_destinos(con, canal=canal, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
     if ranking.empty:
@@ -119,6 +131,12 @@ with tab_destinos:
 
 # Tab 3: Repetición
 with tab_repeticion:
+    st.markdown(
+        "**Qué factores explican que un cliente repita**. El canal de adquisición y la "
+        "campaña asociada a la reserva pesan más en la recurrencia que el dispositivo desde el que se "
+        "navega o se compra."
+    )
+
     st.subheader("% de clientes recurrentes por canal")
     st.caption("Este gráfico ya desglosa por canal, así que ignora el filtro de canal del sidebar (sí respeta el de fechas).")
     recurrencia_canal = q.recurrencia_por_canal(con, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
