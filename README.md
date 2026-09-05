@@ -28,7 +28,12 @@ No hace falta ningún paso previo con los CSV: `/data/processed/civitatis.duckdb
 (la base ya limpia y con las métricas calculadas) viene incluida en el repo,
 y es lo único que usan tanto la app como los notebooks 02 y 03.
 
-**Solo si quieres regenerar esa base desde cero** (por ejemplo, usando
+**Excepción: el notebook 01 (`01_exploracion_inicial.ipynb`) sí necesita los CSV originales**, 
+porque explora los datos sin procesar antes de la limpieza,
+a diferencia de los notebooks 02 y 03. Para ejecutarlo, coloca a mano los
+CSV de Civitatis en `/data/raw` (previamente habiendo creado dicha carpeta 'raw' dentro de data/).
+
+**Si además quieres regenerar esa base desde cero** (por ejemplo, usando
 `src/limpieza.py` o `src/metricas.py`) necesitas los CSV originales de
 Civitatis, que sí hay que colocar a mano en `/data/raw` porque no se
 incluyen en el repo (por tamaño y por política del ejercicio). Con ellos
