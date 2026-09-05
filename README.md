@@ -44,8 +44,7 @@ en su sitio:
 ```
 civitatis-business-case/
 ├── app/
-│   └── main.py                        # App Streamlit: 3 pestañas (Estado del
-│                                       # negocio, Destinos, Repetición)
+│   └── main.py                        # App Streamlit: 3 pestañas (Estado del negocio, Destinos, Repetición)
 ├── data/
 │   ├── raw/                           # CSV originales de Civitatis
 │   │                                   # (colocar a mano solo si se va a regenerar la base)
@@ -55,8 +54,7 @@ civitatis-business-case/
 ├── notebooks/
 │   ├── 01_exploracion_inicial.ipynb   # Perfilado de calidad de los CSV originales:
 │   │                                   
-│   ├── 02_negocio_y_destinos.ipynb    # Estado del negocio y ranking de
-│   │                                   # destinos por venta y por retención
+│   ├── 02_negocio_y_destinos.ipynb    # Estado del negocio y ranking de destinos por venta y por retención
 │   │
 │   └── 03_repeticion.ipynb            # Factores que afectan a la repetición de compra
 │                                       
@@ -65,14 +63,12 @@ civitatis-business-case/
 │   │                                   
 │   ├── limpieza.py                    # Limpieza de datos e identificación de clientes 
 │   │                                   
-│   ├── metricas.py                    # Define y calcula venta, cliente
-│   │                                   # recurrente y conversión 
+│   ├── metricas.py                    # Define y calcula venta, cliente recurrente y conversión 
 │   │                                   
 │   └── queries.py                     # Consultas reutilizadas por la app
 │                                       
 ├── reports/
-│   └── data_quality_report.md         # Informe cuantificado del impacto de
-│                                       # cada decisión de limpieza
+│   └── data_quality_report.md         # Informe cuantificado del impacto de cada decisión de limpieza
 ├── requirements.txt
 ├── .gitignore
 └── README.md
