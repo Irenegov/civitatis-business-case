@@ -34,14 +34,17 @@ a diferencia de los notebooks 02 y 03. Para ejecutarlo, coloca a mano los
 CSV de Civitatis en `/data/raw` (previamente habiendo creado dicha carpeta 'raw' dentro de data/).
 
 **Si además quieres regenerar `civitatis.duckdb` desde cero** (por ejemplo,
-tras tocar `src/limpieza.py` o `src/metricas.py`), también necesitas los CSV
+tras usar `src/limpieza.py` o `src/metricas.py`), también necesitas los CSV
 originales en `/data/raw`. Con ellos en su sitio:
 ```bash
    python -m src.limpieza
    python -m src.metricas
 ```
 
-**Enlace a la app (solo es necesario hacer click, sin comandos):** https://civitatis-business-case-irenegov.streamlit.app/
+## Enlace a la app 
+
+(solo es necesario hacer click, sin comandos): 
+**https://civitatis-business-case-irenegov.streamlit.app/**
 
 ## Estructura del repositorio
 ```
