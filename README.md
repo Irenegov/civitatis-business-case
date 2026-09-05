@@ -99,6 +99,14 @@ Se verificó que ningún `cookie_id`/`temp_client_id` está ligado a más de un 
 
 - **Análisis de destinos sobre el acumulado histórico**: se comprobó que la mayor retención de los destinos top no se explica por antigüedad en el catálogo (874 vs. 871 días de media entre el top-3 y el resto), descartando ese sesgo.
 
+- **Clasificación de campañas como "retención" vs. "captación"**: se infirió 
+  a partir del nombre de la campaña (ej. `post_compra_crossell`, 
+  `carrito_abandonado` → retención; `tiktok_destinos`, `ig_reels_verano` → 
+  captación), no se verificó cruzando si los clientes de cada campaña ya 
+  tenían reservas previas o eran nuevos. Es una interpretación del 
+  nombre, pero queda como supuesto no verificado con datos (como próximo o futuro paso 
+ del análisis).
+
 
 ### Definición de métricas clave
 
