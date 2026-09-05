@@ -41,6 +41,7 @@ en su sitio:
 **Enlace a la app (solo es necesario hacer click, sin comandos):** https://civitatis-business-case-irenegov.streamlit.app/
 
 ## Estructura del repositorio
+```
 civitatis-business-case/
 ├── app/
 │   └── main.py                        # App Streamlit: 3 pestañas (Estado del
@@ -75,6 +76,7 @@ civitatis-business-case/
 ├── requirements.txt
 ├── .gitignore
 └── README.md
+``` 
 
 ## Decisiones y uso de IA
 
