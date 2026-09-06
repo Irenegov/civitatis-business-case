@@ -35,7 +35,26 @@ def construir_base_procesada() -> dict:
         eventos_antes_filas = con.execute("SELECT count(*) FROM ga_eventos").fetchone()[0]
         clientes_antes_filas = con.execute("SELECT count(*) FROM clientes").fetchone()[0]
 
-        # 1) reservas_limpias: normaliza 'estado' a minúsculas (confirmada/cancelada/pendiente) y elimina las 30 reservas con personas <= 0 (no existe una reserva de "0" o "-1" personas, es un error de captura)
+        # 0) clientes_fecha_futura_invalida: user_id de los 40 clientes con fecha_alta
+        # o fecha_baja posterior a hoy (39 fecha_baja + 1 fecha_alta; ver
+        # notebooks/01_exploracion_inicial.ipynb, sección "Verificación de
+        # fecha_baja y fecha_alta futuras"). Se investigó la hipótesis de que
+        # fueran fechas programadas a propósito, coincidiendo con la actividad
+        # reservada por el cliente (p. ej. baja programada justo tras disfrutar
+        # su último tour, o alta coincidiendo con su primera reserva), y NO se
+        # confirmó con los datos: 0 de los 39 casos de fecha_baja coincide (ni
+        # exacto ni con un margen de días) con la fecha_actividad de su última
+        # reserva, y el único caso de fecha_alta futura no tiene ninguna reserva
+        # asociada con la que pudiera coincidir. Sin esa explicación operativa,
+        # se tratan como error de captura y se excluyen de clientes_limpios y de
+        # reservas_limpias (sus reservas asociadas).
+        con.execute("""
+            CREATE OR REPLACE VIEW clientes_fecha_futura_invalida AS
+            SELECT user_id FROM clientes
+            WHERE fecha_alta > CURRENT_DATE OR fecha_baja > CURRENT_DATE
+        """)
+
+        # 1) reservas_limpias: normaliza 'estado' a minúsculas (confirmada/cancelada/pendiente), elimina las 30 reservas con personas <= 0 (no existe una reserva de "0" o "-1" personas, es un error de captura) y las reservas de clientes_fecha_futura_invalida (ver punto 0)
         #
         # 'tour_gratuito': de las 1.297 reservas con importe_eur = 0€ en /data/raw (investigado
         # con SQL sobre los datos crudos; 1.295 de esas 1.297 siguen en reservas_limpias, ya que
@@ -63,6 +82,7 @@ def construir_base_procesada() -> dict:
             FROM reservas r
             LEFT JOIN tours t ON r.tour_id = t.tour_id
             WHERE r.personas > 0
+              AND r.user_id NOT IN (SELECT user_id FROM clientes_fecha_futura_invalida)
         """)
 
         # 2) eventos_limpios: elimina los 798 eventos duplicados exactos y normaliza 'device' (mobile/desktop/tablet, corrige el typo 'desktp')
@@ -84,10 +104,11 @@ def construir_base_procesada() -> dict:
             FROM ga_eventos
         """)
 
-        # 3) clientes_limpios: sin cambios estructurales necesarios, solo se renombra la tabla para mantener el mismo criterio (*_limpios) que las demás
+        # 3) clientes_limpios: excluye los clientes de clientes_fecha_futura_invalida (ver punto 0); por lo demás, sin cambios estructurales, solo se renombra la tabla para mantener el mismo criterio (*_limpios) que las demás
         con.execute("""
             CREATE OR REPLACE TABLE clientes_limpios AS
             SELECT * FROM clientes
+            WHERE user_id NOT IN (SELECT user_id FROM clientes_fecha_futura_invalida)
         """)
 
         # 4) paso1: primer intento de identificar al visitante -> usa user_id cuando existe (visitante autenticado)
@@ -146,6 +167,17 @@ def calcular_impacto_limpieza(con: duckdb.DuckDBPyConnection, *, reservas_antes_
     m["reservas_personas_invalidas_filas"] = filas_eliminadas
     m["reservas_personas_invalidas_importe"] = round(importe_eliminado, 2)
 
+    filas_fecha_futura, importe_fecha_futura = con.execute("""
+        SELECT count(*), coalesce(sum(importe_eur), 0) FROM reservas
+        WHERE user_id IN (SELECT user_id FROM clientes_fecha_futura_invalida)
+    """).fetchone()
+    m["reservas_fecha_futura_invalida_filas"] = filas_fecha_futura
+    m["reservas_fecha_futura_invalida_importe"] = round(importe_fecha_futura, 2)
+    m["reservas_fecha_futura_y_personas_invalidas_solapadas"] = con.execute("""
+        SELECT count(*) FROM reservas
+        WHERE user_id IN (SELECT user_id FROM clientes_fecha_futura_invalida) AND personas <= 0
+    """).fetchone()[0]
+
     reservas_despues_filas, reservas_despues_importe = con.execute(
         "SELECT count(*), sum(importe_eur) FROM reservas_limpias"
     ).fetchone()
@@ -180,7 +212,12 @@ def calcular_impacto_limpieza(con: duckdb.DuckDBPyConnection, *, reservas_antes_
     """).fetchone()[0]
 
     # --- clientes_limpios ---
+    m["clientes_antes_filas"] = clientes_antes_filas
     m["clientes_filas"] = clientes_antes_filas
+    m["clientes_fecha_futura_invalida_filas"] = con.execute(
+        "SELECT count(*) FROM clientes_fecha_futura_invalida"
+    ).fetchone()[0]
+    m["clientes_despues_filas"] = con.execute("SELECT count(*) FROM clientes_limpios").fetchone()[0]
 
     # --- resolución de identidad, paso a paso ---
     m["identidad_total_eventos"] = con.execute("SELECT count(*) FROM eventos_con_id").fetchone()[0]
@@ -236,6 +273,15 @@ y cuánto cambian los números por ello.
   `tour_gratuito` a `reservas_limpias` para dejar constancia explícita de
   que se investigó y documentar qué reservas son gratuitas por diseño.
 
+- **Reservas de clientes con `fecha_alta`/`fecha_baja` futura (decisión
+  pendiente del análisis exploratorio, ahora resuelta; ver detalle en la
+  sección 3, "Clientes")**: se han eliminado también las
+  **{m['reservas_fecha_futura_invalida_filas']} reservas** (
+  {m['reservas_fecha_futura_invalida_importe']:,.2f} €) de esos clientes —
+  de ellas, {m['reservas_fecha_futura_y_personas_invalidas_solapadas']} ya
+  estaba contada en el filtro de "personas <= 0" anterior, así que no se
+  resta dos veces del total.
+
 **Resultado**: las reservas pasan de {m['reservas_antes_filas']:,} a
 {m['reservas_despues_filas']:,} filas, y el importe total pasa de
 {m['reservas_antes_importe']:,.2f} € a {m['reservas_despues_importe']:,.2f} €
@@ -260,10 +306,25 @@ un {100 * (m['reservas_antes_importe'] - m['reservas_despues_importe']) / m['res
 
 ## 3. Clientes (`clientes` → `clientes_limpios`)
 
-No se ha encontrado ningún problema que corregir en esta tabla (según lo
-visto en el análisis exploratorio). Se copia tal cual, solo con el nombre
-`clientes_limpios` para seguir el mismo criterio que el resto de tablas.
-Sigue teniendo **{m['clientes_filas']:,} clientes**.
+- **Clientes con `fecha_alta` o `fecha_baja` en el futuro (decisión pendiente
+  del análisis exploratorio, ahora resuelta)**: el notebook de exploración
+  (`notebooks/01_exploracion_inicial.ipynb`) detectó 39 clientes con
+  `fecha_baja` posterior a hoy y 1 con `fecha_alta` posterior a hoy
+  (**{m['clientes_fecha_futura_invalida_filas']} en total**). Antes de
+  tratarlos como error, se investigó si esas fechas respondían a una decisión
+  del cliente ligada a su actividad reservada — p. ej. programar la baja para
+  justo después de disfrutar su último tour, o el alta coincidiendo con su
+  primera reserva. Esa hipótesis **no se confirmó con los datos**: ninguno de
+  los 39 casos de `fecha_baja` coincide, ni exacto ni con un margen de días,
+  con la `fecha_actividad` de su última reserva (la diferencia mínima
+  observada es de 182 días), y el único cliente con `fecha_alta` futura no
+  tiene ninguna reserva asociada. Sin esa explicación operativa, se tratan
+  como error de captura: se excluyen de `clientes_limpios` y de sus
+  `reservas_limpias` asociadas (ver sección 1).
+
+**Resultado**: los clientes pasan de {m['clientes_antes_filas']:,} a
+{m['clientes_despues_filas']:,} filas ({m['clientes_fecha_futura_invalida_filas']}
+excluidos).
 
 
 ## 4. Identificar al visitante detrás de cada evento (`paso1` → `paso2` → `eventos_con_id`)
