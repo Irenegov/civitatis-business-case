@@ -107,6 +107,22 @@ Se verificó que ningún `cookie_id`/`temp_client_id` está ligado a más de un 
   nombre, pero queda como supuesto no verificado con datos (como próximo o futuro paso 
  del análisis).
 
+- **Eventos `purchase` sin `reserva_id` correspondiente (40 de 8.341, ~0,5%)**: 
+  se verificó si el resto de columnas de esos eventos (identidad del 
+  visitante, dispositivo, fecha, etc.) estaban rellenas y eran coherentes, 
+  para distinguir entre un evento corrupto o erróneo y una compra real con un simple 
+  desfase de sincronización. Se confirmó que sí — el resto de campos está 
+  completo, lo que apoya la hipótesis de un desfase temporal entre el 
+  registro de analítica y la escritura en la base de reservas.
+
+- **`proveedor_id` inexistente en 187 reservas y 1 tour**: mismo criterio de 
+  verificación — se comprobó que el resto de columnas de esas 187 reservas 
+  (cliente, tour, importe, fechas, estado) estaban rellenas y eran 
+  coherentes, lo que apoya que son reservas reales con un problema aislado 
+  en el campo proveedor, no reservas corruptas en general.
+
+  *(idealmente se consultaría al equipo técnico o de operaciones si han registrado más fallos en el registro de `purchase` o verificar si hay proveedores dados de baja que ya no estén registrados)*  
+
 
 ### Definición de métricas clave
 
