@@ -35,19 +35,7 @@ def construir_base_procesada() -> dict:
         eventos_antes_filas = con.execute("SELECT count(*) FROM ga_eventos").fetchone()[0]
         clientes_antes_filas = con.execute("SELECT count(*) FROM clientes").fetchone()[0]
 
-        # 0) clientes_fecha_futura_invalida: user_id de los 40 clientes con fecha_alta
-        # o fecha_baja posterior a hoy (39 fecha_baja + 1 fecha_alta; ver
-        # notebooks/01_exploracion_inicial.ipynb, sección "Verificación de
-        # fecha_baja y fecha_alta futuras"). Se investigó la hipótesis de que
-        # fueran fechas programadas a propósito, coincidiendo con la actividad
-        # reservada por el cliente (p. ej. baja programada justo tras disfrutar
-        # su último tour, o alta coincidiendo con su primera reserva), y NO se
-        # confirmó con los datos: 0 de los 39 casos de fecha_baja coincide (ni
-        # exacto ni con un margen de días) con la fecha_actividad de su última
-        # reserva, y el único caso de fecha_alta futura no tiene ninguna reserva
-        # asociada con la que pudiera coincidir. Sin esa explicación operativa,
-        # se tratan como error de captura y se excluyen de clientes_limpios y de
-        # reservas_limpias (sus reservas asociadas).
+        # 0) clientes_fecha_futura_invalida: detecta los clientes con fecha_alta o fecha_baja en el futuro, que se consideran errores de captura y se excluyen de clientes_limpios y reservas_limpias
         con.execute("""
             CREATE OR REPLACE VIEW clientes_fecha_futura_invalida AS
             SELECT user_id FROM clientes
